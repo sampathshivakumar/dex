@@ -105,7 +105,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GHCR_PAT }}
+          password: ${{ github.token }}
         if: inputs.publish
 
       - name: Login to Docker Hub
