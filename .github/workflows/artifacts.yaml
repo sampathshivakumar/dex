@@ -76,7 +76,7 @@ jobs:
           images: |
             ${{ steps.image-name.outputs.value }}
             dockersampath/dex
-            ghcr.io/dockersampath/dex
+            ghcr.io/sampathshivakumar/dex
           flavor: |
             latest = false
           tags: |
