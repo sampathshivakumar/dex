@@ -1,5 +1,4 @@
 name: Artifacts
-
 on:
   workflow_call:
     inputs:
@@ -8,11 +7,6 @@ on:
         default: false
         required: false
         type: boolean
-    secrets:
-      DOCKER_USERNAME:
-        required: true
-      DOCKER_PASSWORD:
-        required: true
     outputs:
       container-image-name:
         description: Container image name
@@ -67,7 +61,7 @@ jobs:
 
       - name: Set image name
         id: image-name
-        run: echo "value=ghcr.io/${{ github.repository }}" >> "$GITHUB_OUTPUT"
+        run: echo "value=682033504346.dkr.ecr.ap-south-1.amazonaws.com/my-repo" >> "$GITHUB_OUTPUT"
 
       - name: Gather build metadata
         id: meta
@@ -75,8 +69,6 @@ jobs:
         with:
           images: |
             ${{ steps.image-name.outputs.value }}
-            dockersampath/dex
-            ghcr.io/sampathshivakumar/dex
           flavor: |
             latest = false
           tags: |
@@ -91,8 +83,6 @@ jobs:
           labels: |
             org.opencontainers.image.documentation=https://dexidp.io/docs/
 
-      # Multiple exporters are not supported yet
-      # See https://github.com/moby/buildkit/pull/2760
       - name: Determine build output
         uses: haya14busa/action-cond@94f77f7a80cd666cb3155084e428254fea4281fd # v1.2.1
         id: build-output
@@ -101,20 +91,18 @@ jobs:
           if_true: type=image,push=true
           if_false: type=oci,dest=image.tar
 
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ github.token }}
-        if: inputs.publish
+          role-to-assume: arn:aws:iam::682033504346:role/your-iam-role-name
+          aws-region: ap-south-1
 
-      - name: Login to Docker Hub
-        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
         with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-        if: inputs.publish
+          registry-id: 682033504346
+          region: ap-south-1
 
       - name: Build and push image
         id: build
@@ -129,10 +117,7 @@ jobs:
             COMMIT_HASH=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.revision'] }}
             BUILD_DATE=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
           labels: ${{ steps.meta.outputs.labels }}
-          # cache-from: type=gha
-          # cache-to: type=gha,mode=max
           outputs: ${{ steps.build-output.outputs.value }}
-          # push: ${{ inputs.publish }}
 
       - name: Sign the images with GitHub OIDC Token
         run: |
@@ -147,53 +132,11 @@ jobs:
         run: skopeo --insecure-policy copy docker://${{ steps.image-ref.outputs.value }} oci-archive:image.tar
         if: inputs.publish
 
-      # Uncomment the following lines for debugging:
-      # - name: Upload image as artifact
-      #   uses: actions/upload-artifact@v3
-      #   with:
-      #     name: "[${{ github.job }}] OCI tarball"
-      #     path: image.tar
-
       - name: Extract OCI tarball
         run: |
           mkdir -p image
           tar -xf image.tar -C image
 
-      # - name: List tags
-      #   run: skopeo --insecure-policy list-tags oci:image
-      #
-      # # See https://github.com/anchore/syft/issues/1545
-      # - name: Extract image from multi-arch image
-      #   run: skopeo --override-os linux --override-arch amd64 --insecure-policy copy oci:image:${{ steps.image-name.outputs.value }}:${{ steps.meta.outputs.version }} docker-archive:docker.tar
-      #
-      # - name: Generate SBOM
-      #   run: syft -o spdx-json=sbom-spdx.json docker-archive:docker.tar
-      #
-      # - name: Upload SBOM as artifact
-      #   uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32 # v3.1.3
-      #   with:
-      #     name: "[${{ github.job }}] SBOM"
-      #     path: sbom-spdx.json
-      #     retention-days: 5
-
-      # TODO: uncomment when the action is working for non ghcr.io pushes. GH Issue: https://github.com/actions/attest-build-provenance/issues/80
-      # - name: Generate build provenance attestation
-      #   uses: actions/attest-build-provenance@520d128f165991a6c774bcb264f323e3d70747f4 # v2.2.0
-      #   with:
-      #     subject-name: dexidp/dex
-      #     subject-digest: ${{ steps.build.outputs.digest }}
-      #     push-to-registry: true
-
-      - name: Generate build provenance attestation
-        uses: actions/attest-build-provenance@520d128f165991a6c774bcb264f323e3d70747f4 # v2.2.0
-        with:
-          subject-name: ghcr.io/sampathshivakumar/dex
-          subject-digest: ${{ steps.build.outputs.digest }}
-          push-to-registry: true
-        if: inputs.publish
-
-      ## Use cache for the trivy-db to avoid the TOOMANYREQUESTS error https://github.com/aquasecurity/trivy-action/pull/397
-      ## To avoid the trivy-db becoming outdated, we save the cache for one day
       - name: Get data
         id: date
         run: echo "date=$(date +%Y-%m-%d)" >> $GITHUB_OUTPUT
@@ -214,14 +157,7 @@ jobs:
           scan-type: "fs"
           scan-ref: "."
           cache-dir: "./cache"
-        # Disable skipping trivy cache for now
-        # env:
-        #   TRIVY_SKIP_DB_UPDATE: true
-        #   TRIVY_SKIP_JAVA_DB_UPDATE: true
 
-      ## Trivy-db uses `0600` permissions.
-      ## But `action/cache` use `runner` user by default
-      ## So we need to change the permissions before caching the database.
       - name: change permissions for trivy.db
         run: sudo chmod 0644 ./cache/db/trivy.db
 
