@@ -111,5 +111,3 @@ require (
 )
 
 replace github.com/dexidp/dex/api/v2 => ./api/v2
-
-tool entgo.io/ent/cmd/ent
