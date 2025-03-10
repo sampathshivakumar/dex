@@ -1,4 +1,5 @@
 name: Artifacts
+
 on:
   workflow_call:
     inputs:
@@ -7,6 +8,11 @@ on:
         default: false
         required: false
         type: boolean
+    secrets:
+      AWS_ROLE_ARN:
+        required: true
+      AWS_REGION:
+        required: true
     outputs:
       container-image-name:
         description: Container image name
@@ -61,7 +67,7 @@ jobs:
 
       - name: Set image name
         id: image-name
-        run: echo "value=682033504346.dkr.ecr.ap-south-1.amazonaws.com/my-repo" >> "$GITHUB_OUTPUT"
+        run: echo "value=public.ecr.aws/u6x9w5c9/my-repo" >> "$GITHUB_OUTPUT"
 
       - name: Gather build metadata
         id: meta
@@ -94,15 +100,13 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::682033504346:role/GitHubActionsECRPushRole
-          aws-region: ap-south-1
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Login to Amazon ECR
+      - name: Login to AWS Public ECR
         id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v1
-        with:
-          registry-id: 682033504346
-          region: ap-south-1
+        run: |
+          aws ecr-public get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin public.ecr.aws
 
       - name: Build and push image
         id: build
@@ -136,6 +140,14 @@ jobs:
         run: |
           mkdir -p image
           tar -xf image.tar -C image
+
+      - name: Generate build provenance attestation
+        uses: actions/attest-build-provenance@520d128f165991a6c774bcb264f323e3d70747f4 # v2.2.0
+        with:
+          subject-name: public.ecr.aws/u6x9w5c9/my-repo
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+        if: inputs.publish
 
       - name: Get data
         id: date
