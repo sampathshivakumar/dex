@@ -91,7 +91,7 @@ jobs:
           platforms: ${{ matrix.platform }}
           tags: |
             ${{ steps.image-name.outputs.value }}:${{ matrix.variant }}-${{ env.PLATFORM_TAG }}
-            ${{ steps.image-name.outputs.value }}:latest
+            ${{ steps.image-name.outputs.value }}:${{ matrix.variant }}
           build-args: |
             BASE_IMAGE=${{ matrix.variant }}
           outputs: type=image,push=true
@@ -99,3 +99,6 @@ jobs:
       - name: Set image ref
         id: image-ref
         run: echo "value=${{ steps.image-name.outputs.value }}@${{ steps.build.outputs.digest }}" >> "$GITHUB_OUTPUT"
+
+      - name: List images after push
+        run: aws ecr-public describe-images --repository-name my-repo --region us-east-1
