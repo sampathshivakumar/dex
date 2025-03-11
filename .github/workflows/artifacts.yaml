@@ -78,6 +78,10 @@ jobs:
           flavor: |
             latest = false
           tags: |
+            type=ref,event=branch,enable=${{ matrix.variant == 'alpine' }}
+            type=ref,event=pr,prefix=pr-,enable=${{ matrix.variant == 'alpine' }}
+            type=semver,pattern={{raw}},enable=${{ matrix.variant == 'alpine' }}
+            type=raw,value=latest,enable=${{ github.ref_name == github.event.repository.default_branch && matrix.variant == 'alpine' }}
             type=ref,event=branch,suffix=-${{ matrix.variant }}
             type=ref,event=pr,prefix=pr-,suffix=-${{ matrix.variant }}
             type=semver,pattern={{raw}},suffix=-${{ matrix.variant }}
@@ -109,7 +113,7 @@ jobs:
         uses: docker/build-push-action@0adf9959216b96bec444f325f1e493d4aa344497 # v6.14.0
         with:
           context: .
-          platforms: linux/amd64,linux/arm64  # Build for both amd64 and arm64
+          platforms: linux/amd64,linux/arm/v7,linux/arm64,linux/ppc64le,linux/s390x
           tags: ${{ steps.meta.outputs.tags }}
           build-args: |
             BASE_IMAGE=${{ matrix.variant }}
@@ -117,16 +121,7 @@ jobs:
             COMMIT_HASH=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.revision'] }}
             BUILD_DATE=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
           labels: ${{ steps.meta.outputs.labels }}
-          push: true  # Push the images to the registry
-          load: false  # Do not load the images into the local Docker daemon
-
-      - name: Create and push manifest list
-        run: |
-          docker manifest create ${{ steps.image-name.outputs.value }}:latest \
-            ${{ steps.image-name.outputs.value }}:latest-amd64 \
-            ${{ steps.image-name.outputs.value }}:latest-arm64
-
-          docker manifest push ${{ steps.image-name.outputs.value }}:latest
+          outputs: ${{ steps.build-output.outputs.value }}
 
       - name: Sign the images with GitHub OIDC Token
         run: |
