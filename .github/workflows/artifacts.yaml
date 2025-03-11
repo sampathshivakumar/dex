@@ -94,7 +94,6 @@ jobs:
           context: .
           platforms: ${{ matrix.platform }}
           tags: |
-            ${{ steps.image-name.outputs.value }}:${{ matrix.variant }}-${{ env.PLATFORM_TAG }}
             ${{ steps.image-name.outputs.value }}:${{ matrix.variant }}-${{ env.PLATFORM_TAG }}-${{ env.SHORT_SHA }}
             ${{ steps.image-name.outputs.value }}:latest
           build-args: |
