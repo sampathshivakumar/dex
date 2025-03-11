@@ -73,6 +73,13 @@ jobs:
         run: |
           aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws
 
+      - name: Delete Untagged Images
+        run: |
+          IMAGE_IDS=$(aws ecr-public describe-images --repository-name my-repo --region us-east-1 --query 'imageDetails[?length(imageTags)==`0`].imageDigest' --output text)
+          for ID in $IMAGE_IDS; do
+            aws ecr-public batch-delete-image --repository-name my-repo --region us-east-1 --image-ids imageDigest=$ID
+          done || echo "No untagged images to delete"
+
       - name: Set image name
         id: image-name
         run: echo "value=public.ecr.aws/u6x9w5c9/my-repo" >> "$GITHUB_OUTPUT"
