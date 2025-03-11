@@ -29,7 +29,7 @@ permissions:
 
 jobs:
   container-images:
-    name: Container images
+    name: Build and Push Multi-Arch Image
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -83,21 +83,36 @@ jobs:
         env:
           MATRIX_PLATFORM: ${{ matrix.platform }}
 
-      - name: Build image without pushing
+      - name: Build and push individual arch image
         id: build
         uses: docker/build-push-action@v6
         with:
           context: .
           platforms: ${{ matrix.platform }}
-          tags: ${{ steps.image-name.outputs.value }}:${{ matrix.variant }}-${{ env.PLATFORM_TAG }}
+          tags: |
+            ${{ steps.image-name.outputs.value }}:${{ matrix.variant }}-${{ env.PLATFORM_TAG }}
           build-args: |
             BASE_IMAGE=${{ matrix.variant }}
-          outputs: type=docker # Keeps images locally without pushing
+          push: true # Push the arch-specific images
 
-      - name: Push final multi-arch image
+  push-multi-arch:
+    name: Create and Push Multi-Arch Manifest
+    runs-on: ubuntu-latest
+    needs: container-images
+    strategy:
+      matrix:
+        variant:
+          - alpine
+          - distroless
+
+    steps:
+      - name: Login to AWS Public ECR
         run: |
-          docker buildx create --use
+          aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws
+
+      - name: Create and push multi-arch manifest
+        run: |
           docker buildx imagetools create \
-            -t ${{ steps.image-name.outputs.value }}:${{ matrix.variant }} \
-            ${{ steps.image-name.outputs.value }}:${{ matrix.variant }}-linux-amd64 \
-            ${{ steps.image-name.outputs.value }}:${{ matrix.variant }}-linux-arm64
+            -t ${{ needs.container-images.outputs.name }}:${{ matrix.variant }} \
+            ${{ needs.container-images.outputs.name }}:${{ matrix.variant }}-linux-amd64 \
+            ${{ needs.container-images.outputs.name }}:${{ matrix.variant }}-linux-arm64
