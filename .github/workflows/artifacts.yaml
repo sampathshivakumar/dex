@@ -99,6 +99,3 @@ jobs:
       - name: Set image ref
         id: image-ref
         run: echo "value=${{ steps.image-name.outputs.value }}@${{ steps.build.outputs.digest }}" >> "$GITHUB_OUTPUT"
-
-      - name: List images after push
-        run: aws ecr-public describe-images --repository-name my-repo --region us-east-1
