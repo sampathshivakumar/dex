@@ -35,10 +35,10 @@ jobs:
       matrix:
         variant:
           - alpine
-          #- distroless
+          - distroless
         platform:
           - linux/amd64
-          #- linux/arm64
+          - linux/arm64
 
     permissions:
       attestations: write
@@ -83,7 +83,7 @@ jobs:
         env:
           MATRIX_PLATFORM: ${{ matrix.platform }}
 
-      - name: Build and push image
+      - name: Build image without pushing
         id: build
         uses: docker/build-push-action@v6
         with:
@@ -92,8 +92,12 @@ jobs:
           tags: ${{ steps.image-name.outputs.value }}:${{ matrix.variant }}-${{ env.PLATFORM_TAG }}
           build-args: |
             BASE_IMAGE=${{ matrix.variant }}
-          outputs: type=image,push=true
+          outputs: type=docker # Keeps images locally without pushing
 
-      - name: Set image ref
-        id: image-ref
-        run: echo "value=${{ steps.image-name.outputs.value }}@${{ steps.build.outputs.digest }}" >> "$GITHUB_OUTPUT"
+      - name: Push final multi-arch image
+        run: |
+          docker buildx create --use
+          docker buildx imagetools create \
+            -t ${{ steps.image-name.outputs.value }}:${{ matrix.variant }} \
+            ${{ steps.image-name.outputs.value }}:${{ matrix.variant }}-linux-amd64 \
+            ${{ steps.image-name.outputs.value }}:${{ matrix.variant }}-linux-arm64
