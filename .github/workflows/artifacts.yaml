@@ -29,12 +29,16 @@ permissions:
 
 jobs:
   container-images:
-    name: Container images
+    name: Container Images
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        variant: [alpine] 
-        platform: [linux/amd64]    
+        variant:
+          - alpine
+          #- distroless
+        platform:
+          - linux/amd64
+          #- linux/arm64
 
     permissions:
       attestations: write
@@ -49,7 +53,7 @@ jobs:
       ref: ${{ steps.image-ref.outputs.value }}
 
     steps:
-      - name: Checkout repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
       - name: Set up QEMU
@@ -58,7 +62,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Configure AWS credentials
+      - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
@@ -69,17 +73,17 @@ jobs:
         run: |
           aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws
 
-      - name: Set image name
+      - name: Set Image Name
         id: image-name
         run: echo "value=public.ecr.aws/u6x9w5c9/my-repo" >> "$GITHUB_OUTPUT"
 
-      - name: Format platform name
+      - name: Format Platform Name
         id: platform-name
         run: echo "PLATFORM_TAG=${MATRIX_PLATFORM//\//-}" >> $GITHUB_ENV
         env:
           MATRIX_PLATFORM: ${{ matrix.platform }}
 
-      - name: Build and push image
+      - name: Build and Push Image
         id: build
         uses: docker/build-push-action@v6
         with:
@@ -89,7 +93,8 @@ jobs:
           build-args: |
             BASE_IMAGE=${{ matrix.variant }}
           outputs: type=image,push=true
+          provenance: false  # <-- ADDED THIS TO DISABLE PROVENANCE
 
-      - name: Set image ref
+      - name: Set Image Reference
         id: image-ref
         run: echo "value=${{ steps.image-name.outputs.value }}@${{ steps.build.outputs.digest }}" >> "$GITHUB_OUTPUT"
