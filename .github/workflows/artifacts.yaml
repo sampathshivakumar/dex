@@ -66,13 +66,19 @@ jobs:
         id: image-name
         run: echo "value=public.ecr.aws/u6x9w5c9/my-repo" >> "$GITHUB_OUTPUT"
 
+      - name: Format platform name
+        id: platform-name
+        run: echo "PLATFORM_TAG=${MATRIX_PLATFORM//\//-}" >> $GITHUB_ENV
+        env:
+          MATRIX_PLATFORM: ${{ matrix.platform }}
+
       - name: Build and push image
         id: build
         uses: docker/build-push-action@v6
         with:
           context: .
           platforms: ${{ matrix.platform }}
-          tags: ${{ steps.image-name.outputs.value }}:${{ matrix.variant }}-${{ matrix.platform | replace('/', '-') }}
+          tags: ${{ steps.image-name.outputs.value }}:${{ matrix.variant }}-${{ env.PLATFORM_TAG }}
           build-args: |
             BASE_IMAGE=${{ matrix.variant }}
           outputs: type=image,push=true
