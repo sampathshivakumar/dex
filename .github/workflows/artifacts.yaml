@@ -16,103 +16,94 @@ on:
     outputs:
       container-image-name:
         description: Container image name
-        value: ${{ jobs.container-images.outputs.name }}
+        value: ${{ jobs.alpine-amd64.outputs.name }}
       container-image-digest:
         description: Container image digest
-        value: ${{ jobs.container-images.outputs.digest }}
+        value: ${{ jobs.alpine-amd64.outputs.digest }}
       container-image-ref:
         description: Container image ref
-        value: ${{ jobs.container-images.outputs.ref }}
+        value: ${{ jobs.alpine-amd64.outputs.ref }}
 
 permissions:
   contents: read
 
 jobs:
-  container-images:
-    name: Build and Push Multi-Arch Image
+  setup:
+    name: Setup Workflow
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        variant:
-          - alpine
-          - distroless
-        platform:
-          - linux/amd64
-          - linux/arm64
-
-    permissions:
-      attestations: write
-      contents: read
-      packages: write
-      id-token: write
-      security-events: write
-
-    outputs:
-      name: ${{ steps.image-name.outputs.value }}
-      digest: ${{ steps.build.outputs.digest }}
-      ref: ${{ steps.image-ref.outputs.value }}
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
-
       - name: Login to AWS Public ECR
         id: login-ecr
         run: |
           aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws
 
-      - name: Set image name
-        id: image-name
-        run: echo "value=public.ecr.aws/u6x9w5c9/my-repo" >> "$GITHUB_OUTPUT"
-
-      - name: Format platform name
-        id: platform-name
-        run: echo "PLATFORM_TAG=${MATRIX_PLATFORM//\//-}" >> $GITHUB_ENV
-        env:
-          MATRIX_PLATFORM: ${{ matrix.platform }}
-
-      - name: Build and push individual arch image
+  alpine-amd64:
+    name: Build and Push Alpine (amd64)
+    runs-on: ubuntu-latest
+    needs: setup
+    steps:
+      - name: Build and push image
         id: build
         uses: docker/build-push-action@v6
         with:
           context: .
-          platforms: ${{ matrix.platform }}
-          tags: |
-            ${{ steps.image-name.outputs.value }}:${{ matrix.variant }}-${{ env.PLATFORM_TAG }}
-          build-args: |
-            BASE_IMAGE=${{ matrix.variant }}
-          push: true # Push the arch-specific images
+          platforms: linux/amd64
+          tags: public.ecr.aws/u6x9w5c9/my-repo:alpine-amd64
+          build-args: BASE_IMAGE=alpine
+          outputs: type=image,push=true
 
-  push-multi-arch:
-    name: Create and Push Multi-Arch Manifest
+  alpine-arm64:
+    name: Build and Push Alpine (arm64)
     runs-on: ubuntu-latest
-    needs: container-images
-    strategy:
-      matrix:
-        variant:
-          - alpine
-          - distroless
-
+    needs: setup
     steps:
-      - name: Login to AWS Public ECR
-        run: |
-          aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws
+      - name: Build and push image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/arm64
+          tags: public.ecr.aws/u6x9w5c9/my-repo:alpine-arm64
+          build-args: BASE_IMAGE=alpine
+          outputs: type=image,push=true
 
-      - name: Create and push multi-arch manifest
-        run: |
-          docker buildx imagetools create \
-            -t ${{ needs.container-images.outputs.name }}:${{ matrix.variant }} \
-            ${{ needs.container-images.outputs.name }}:${{ matrix.variant }}-linux-amd64 \
-            ${{ needs.container-images.outputs.name }}:${{ matrix.variant }}-linux-arm64
+  distroless-amd64:
+    name: Build and Push Distroless (amd64)
+    runs-on: ubuntu-latest
+    needs: setup
+    steps:
+      - name: Build and push image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          tags: public.ecr.aws/u6x9w5c9/my-repo:distroless-amd64
+          build-args: BASE_IMAGE=distroless
+          outputs: type=image,push=true
+
+  distroless-arm64:
+    name: Build and Push Distroless (arm64)
+    runs-on: ubuntu-latest
+    needs: setup
+    steps:
+      - name: Build and push image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/arm64
+          tags: public.ecr.aws/u6x9w5c9/my-repo:distroless-arm64
+          build-args: BASE_IMAGE=distroless
+          outputs: type=image,push=true
