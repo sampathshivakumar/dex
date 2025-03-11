@@ -35,10 +35,10 @@ jobs:
       matrix:
         variant:
           - alpine
-          - distroless
+          #- distroless
         platform:
           - linux/amd64
-          - linux/arm64
+          #- linux/arm64
 
     permissions:
       attestations: write
