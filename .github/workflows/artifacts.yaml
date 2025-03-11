@@ -89,9 +89,7 @@ jobs:
         with:
           context: .
           platforms: ${{ matrix.platform }}
-          tags: |
-            ${{ steps.image-name.outputs.value }}:${{ matrix.variant }}-${{ env.PLATFORM_TAG }}
-            ${{ steps.image-name.outputs.value }}:${{ matrix.variant }}
+          tags: ${{ steps.image-name.outputs.value }}:${{ matrix.variant }}-${{ env.PLATFORM_TAG }}
           build-args: |
             BASE_IMAGE=${{ matrix.variant }}
           outputs: type=image,push=true
