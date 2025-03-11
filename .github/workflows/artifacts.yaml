@@ -72,7 +72,7 @@ jobs:
         with:
           context: .
           platforms: ${{ matrix.platform }}
-          tags: ${{ steps.image-name.outputs.value }}:${{ matrix.variant }}-${{ matrix.platform }}
+          tags: ${{ steps.image-name.outputs.value }}:${{ matrix.variant }}-${{ matrix.platform | replace('/', '-') }}
           build-args: |
             BASE_IMAGE=${{ matrix.variant }}
           outputs: type=image,push=true
