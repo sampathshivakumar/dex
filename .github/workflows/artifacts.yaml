@@ -73,9 +73,14 @@ jobs:
         run: |
           aws ecr-public get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin public.ecr.aws
 
+      #- name: Set Image Name
+      # id: image-name
+      # run: echo "value=${{ secrets.ECR_REPO }}" >> "$GITHUB_OUTPUT"
       - name: Set Image Name
         id: image-name
-        run: echo "value=${{ secrets.ECR_REPO }}" >> "$GITHUB_OUTPUT"
+        run: echo "value=${ECR_REPO}" >> "$GITHUB_OUTPUT"
+        env:
+          ECR_REPO: ${{ secrets.ECR_REPO }}
 
       - name: Format Platform Name
         id: platform-name
