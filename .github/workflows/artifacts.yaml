@@ -111,17 +111,17 @@ jobs:
         id: image-ref
         run: echo "value=${{ steps.image-name.outputs.value }}@${{ steps.build.outputs.digest }}" >> "$GITHUB_OUTPUT"
 
-      ##  Install Cosign
+      ## 🔹 Install Cosign
       - name: Install cosign
         uses: sigstore/cosign-installer@v3.8.1
 
-      ##  Sign the Image (Without Uploading `.sig` to ECR)
+      ## 🔹 Sign the Image (Without Uploading `.sig` to ECR)
       - name: Sign the images with GitHub OIDC Token
         run: |
-          cosign sign --yes --output-file=signature.sig ${{ steps.image-name.outputs.value }}@${{ steps.build.outputs.digest }}
+          cosign sign --yes --upload=false --output-file=signature.sig ${{ steps.image-name.outputs.value }}@${{ steps.build.outputs.digest }}
         if: inputs.publish
 
-      ##  Upload Cosign Signature as Artifact
+      ## 🔹 Upload Cosign Signature as Artifact
       - name: Upload Cosign Signature as Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -129,7 +129,7 @@ jobs:
           path: signature.sig
         if: inputs.publish
 
-      ##  Trivy Security Scan Steps
+      ## 🔹 Trivy Security Scan Steps
       - name: Get date
         id: date
         run: echo "date=$(date +%Y-%m-%d)" >> $GITHUB_OUTPUT
