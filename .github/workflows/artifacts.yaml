@@ -111,9 +111,48 @@ jobs:
         id: image-ref
         run: echo "value=${{ steps.image-name.outputs.value }}@${{ steps.build.outputs.digest }}" >> "$GITHUB_OUTPUT"
 
-      - name: Upload Image as Artifact (Only for PRs)
+      ## 🔹 Trivy Security Scan Steps (Added Below) 🔹
+
+      - name: Get date
+        id: date
+        run: echo "date=$(date +%Y-%m-%d)" >> $GITHUB_OUTPUT
+
+      - name: Restore Trivy cache
+        uses: actions/cache@v4
+        with:
+          path: cache/db
+          key: trivy-cache-${{ steps.date.outputs.date }}
+          restore-keys: trivy-cache-
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@0.29.0
+        with:
+          input: image
+          format: sarif
+          output: trivy-results.sarif
+          scan-type: "fs"
+          scan-ref: "."
+          cache-dir: "./cache"
+
+      - name: Change permissions for Trivy DB
+        run: sudo chmod 0644 ./cache/db/trivy.db
+
+      - name: Upload Trivy scan results as an artifact
         uses: actions/upload-artifact@v4
         with:
-          name: "OCI-Image-${{ matrix.variant }}-${{ env.PLATFORM_TAG }}"  
+          name: "Trivy-scan-results-${{ matrix.variant }}-${{ env.PLATFORM_TAG }}"
+          path: trivy-results.sarif
+          retention-days: 5
+          overwrite: true
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
+
+      - name: Upload Image as Artifact (Only for PRs)    # Comment this part if you don't want to upload images as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: "OCI-Image-${{ matrix.variant }}-${{ env.PLATFORM_TAG }}"
           path: image.tar
         if: github.event_name == 'pull_request'
