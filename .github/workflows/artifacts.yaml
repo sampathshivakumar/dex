@@ -75,7 +75,7 @@ jobs:
 
       - name: Set Image Name
         id: image-name
-        run: echo "value=public.ecr.aws/zinclabs/dex" >> "$GITHUB_OUTPUT"
+        run: echo "value=public.ecr.aws/u6x9w5c9/my-repo" >> "$GITHUB_OUTPUT"
       # run: echo "value=${{ secrets.ECR_REPO }}" >> "$GITHUB_OUTPUT"
 
       - name: Format Platform Name
