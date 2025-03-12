@@ -85,6 +85,25 @@ jobs:
         id: short-sha
         run: echo "SHORT_SHA=$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_ENV
 
+      ##  Gather Build Metadata
+      - name: Gather Build Metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ${{ steps.image-name.outputs.value }}
+          flavor: latest=false
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix=sha-
+            type=semver,pattern={{raw}}
+          labels: |
+            org.opencontainers.image.title=My Container
+            org.opencontainers.image.description=This is a container image built by GitHub Actions.
+            org.opencontainers.image.documentation=https://your-docs-url.com/
+            org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
+            org.opencontainers.image.revision=${{ github.sha }}
+
       - name: Determine build output
         uses: haya14busa/action-cond@v1
         id: build-output
@@ -99,9 +118,8 @@ jobs:
         with:
           context: .
           platforms: ${{ matrix.platform }}
-          tags: |
-            ${{ steps.image-name.outputs.value }}:${{ matrix.variant }}-${{ env.PLATFORM_TAG }}-${{ env.SHORT_SHA }}
-            ${{ steps.image-name.outputs.value }}:${{ matrix.variant }}-${{ env.PLATFORM_TAG }}-latest
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             BASE_IMAGE=${{ matrix.variant }}
           outputs: ${{ steps.build-output.outputs.value }}
@@ -111,17 +129,17 @@ jobs:
         id: image-ref
         run: echo "value=${{ steps.image-name.outputs.value }}@${{ steps.build.outputs.digest }}" >> "$GITHUB_OUTPUT"
 
-      ## 🔹 Install Cosign
+      ##  Install Cosign
       - name: Install cosign
         uses: sigstore/cosign-installer@v3.8.1
 
-      ## 🔹 Sign the Image (Without Uploading `.sig` to ECR)
+      ##  Sign the Image (Without Uploading `.sig` to ECR)
       - name: Sign the images with GitHub OIDC Token
         run: |
           cosign sign --yes --upload=false --output-file=signature.sig ${{ steps.image-name.outputs.value }}@${{ steps.build.outputs.digest }}
         if: inputs.publish
 
-      ## 🔹 Upload Cosign Signature as Artifact
+      ##  Upload Cosign Signature as Artifact
       - name: Upload Cosign Signature as Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -129,47 +147,29 @@ jobs:
           path: signature.sig
         if: inputs.publish
 
-      ## 🔹 Trivy Security Scan Steps
-      - name: Get date
-        id: date
-        run: echo "date=$(date +%Y-%m-%d)" >> $GITHUB_OUTPUT
-
-      - name: Restore Trivy cache
-        uses: actions/cache@v4
+      ##  Generate Build Provenance Attestation
+      - name: Generate Build Provenance Attestation
+        uses: actions/attest-build-provenance@v2
         with:
-          path: cache/db
-          key: trivy-cache-${{ steps.date.outputs.date }}
-          restore-keys: trivy-cache-
+          subject-name: ${{ steps.image-name.outputs.value }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+        if: inputs.publish
 
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@0.29.0
-        with:
-          input: image
-          format: sarif
-          output: trivy-results.sarif
-          scan-type: "fs"
-          scan-ref: "."
-          cache-dir: "./cache"
+      ##  Set up Syft for SBOM Generation
+      - name: Set up Syft
+        uses: anchore/sbom-action/download-syft@v0.18.0
 
-      - name: Change permissions for Trivy DB
-        run: sudo chmod 0644 ./cache/db/trivy.db
+      ##  Generate SBOM (Software Bill of Materials)
+      - name: Generate SBOM
+        run: syft -o spdx-json=sbom-spdx.json docker://${{ steps.image-name.outputs.value }}@${{ steps.build.outputs.digest }}
+        if: inputs.publish
 
-      - name: Upload Trivy scan results as an artifact
+      ##  Upload SBOM as an Artifact
+      - name: Upload SBOM as Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: "Trivy-scan-results-${{ matrix.variant }}-${{ env.PLATFORM_TAG }}"
-          path: trivy-results.sarif
+          name: "SBOM-${{ matrix.variant }}-${{ env.PLATFORM_TAG }}"
+          path: sbom-spdx.json
           retention-days: 5
-          overwrite: true
-
-      - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: trivy-results.sarif
-
-      - name: Upload Image as Artifact (Only for PRs)
-        uses: actions/upload-artifact@v4
-        with:
-          name: "OCI-Image-${{ matrix.variant }}-${{ env.PLATFORM_TAG }}"
-          path: image.tar
-        if: github.event_name == 'pull_request'
+        if: inputs.publish
