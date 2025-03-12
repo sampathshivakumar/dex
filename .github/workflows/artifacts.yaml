@@ -87,7 +87,15 @@ jobs:
         id: short-sha
         run: echo "SHORT_SHA=$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_ENV
 
-      - name: Build and Push Image
+      - name: Determine build output
+        uses: haya14busa/action-cond@v1
+        id: build-output
+        with:
+          cond: ${{ github.event_name == 'push' }}
+          if_true: type=image,push=true
+          if_false: type=oci,dest=image.tar
+
+      - name: Build Image
         id: build
         uses: docker/build-push-action@v6
         with:
@@ -98,9 +106,16 @@ jobs:
             ${{ steps.image-name.outputs.value }}:${{ matrix.variant }}-${{ env.PLATFORM_TAG }}-latest
           build-args: |
             BASE_IMAGE=${{ matrix.variant }}
-          outputs: type=image,push=true
+          outputs: ${{ steps.build-output.outputs.value }}
           provenance: false  # Prevents unnecessary provenance attestations
 
       - name: Set Image Reference
         id: image-ref
         run: echo "value=${{ steps.image-name.outputs.value }}@${{ steps.build.outputs.digest }}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload Image as Artifact (Only for PRs)
+        uses: actions/upload-artifact@v3
+        with:
+          name: "OCI Image - ${{ matrix.variant }}-${{ matrix.platform }}"
+          path: image.tar
+        if: github.event_name == 'pull_request'
