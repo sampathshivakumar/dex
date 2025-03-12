@@ -79,9 +79,7 @@ jobs:
 
       - name: Format Platform Name
         id: platform-name
-        run: echo "PLATFORM_TAG=${MATRIX_PLATFORM//\//-}" >> $GITHUB_ENV
-        env:
-          MATRIX_PLATFORM: ${{ matrix.platform }}
+        run: echo "PLATFORM_TAG=${{ matrix.platform }}" | sed 's/\//-/g' >> $GITHUB_ENV
 
       - name: Extract Short SHA for Unique Tagging
         id: short-sha
@@ -113,9 +111,9 @@ jobs:
         id: image-ref
         run: echo "value=${{ steps.image-name.outputs.value }}@${{ steps.build.outputs.digest }}" >> "$GITHUB_OUTPUT"
 
-     # - name: Upload Image as Artifact (Only for PRs)
-     #  uses: actions/upload-artifact@v4
-     #   with:
-     #     name: "OCI Image - ${{ matrix.variant }}-${{ matrix.platform }}"  # Fix: Replace / with -
-     #     path: image.tar
-     #  if: github.event_name == 'pull_request'
+      - name: Upload Image as Artifact (Only for PRs)
+        uses: actions/upload-artifact@v4
+        with:
+          name: "OCI-Image-${{ matrix.variant }}-${{ env.PLATFORM_TAG }}"  
+          path: image.tar
+        if: github.event_name == 'pull_request'
