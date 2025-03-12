@@ -111,8 +111,17 @@ jobs:
         id: image-ref
         run: echo "value=${{ steps.image-name.outputs.value }}@${{ steps.build.outputs.digest }}" >> "$GITHUB_OUTPUT"
 
-      ## 🔹 Trivy Security Scan Steps (Added Below) 🔹
+      ##  Install Cosign
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3.8.1
 
+      ##  Sign the Image (Only for Push Events)
+      - name: Sign the images with GitHub OIDC Token
+        run: |
+          cosign sign --yes ${{ steps.image-name.outputs.value }}@${{ steps.build.outputs.digest }}
+        if: inputs.publish
+
+      ##  Trivy Security Scan Steps
       - name: Get date
         id: date
         run: echo "date=$(date +%Y-%m-%d)" >> $GITHUB_OUTPUT
@@ -150,7 +159,7 @@ jobs:
         with:
           sarif_file: trivy-results.sarif
 
-      - name: Upload Image as Artifact (Only for PRs)    # Comment this part if you don't want to upload images as artifacts
+      - name: Upload Image as Artifact (Only for PRs)
         uses: actions/upload-artifact@v4
         with:
           name: "OCI-Image-${{ matrix.variant }}-${{ env.PLATFORM_TAG }}"
