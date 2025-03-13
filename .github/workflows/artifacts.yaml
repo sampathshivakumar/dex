@@ -87,7 +87,7 @@ jobs:
         id: short-sha
         run: echo "SHORT_SHA=$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_ENV
 
-      - name: Build Image
+      - name: Build and Push Image
         id: build
         uses: docker/build-push-action@v6
         with:
@@ -98,7 +98,10 @@ jobs:
             ${{ steps.image-name.outputs.value }}:${{ matrix.variant }}-${{ env.PLATFORM_TAG }}-latest
           build-args: |
             BASE_IMAGE=${{ matrix.variant }}
-          provenance: false
+          outputs: type=image,push=true
+
+      - name: Debug Image Name
+        run: echo "Pushing image: ${{ steps.image-name.outputs.value }}"
 
       ##  Trivy Security Scan Steps
       - name: Get date
