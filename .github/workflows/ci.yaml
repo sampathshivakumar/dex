@@ -19,15 +19,6 @@ jobs:
     name: Test
     runs-on: ubuntu-latest
 
-    services:
-      postgres:
-        image: postgres:10.8
-        env:
-          TZ: UTC
-        ports:
-          - 5432
-        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -73,7 +64,7 @@ jobs:
     name: Artifacts
     uses: ./.github/workflows/artifacts.yaml
     with:
-      publish: ${{ github.event_name == 'push' }}
+      publish: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
