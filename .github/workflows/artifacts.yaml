@@ -66,16 +66,20 @@ jobs:
         run: |
           aws ecr-public get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin public.ecr.aws
 
+      - name: Extract Short SHA for Unique Tagging
+        id: short-sha
+        run: echo "SHORT_SHA=$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_ENV
+
       - name: Set Image Name
         id: image-name
         run: |
           IMAGE_NAME="public.ecr.aws/u6x9w5c9/my-repo"
-          TAG="${{ inputs.tag_name != '' && inputs.tag_name || env.SHORT_SHA }}"
+          TAG="${{ inputs.tag_name && inputs.tag_name || env.SHORT_SHA }}"
+          if [ -z "$TAG" ]; then
+            echo "Error: Image tag is empty!" >&2
+            exit 1
+          fi
           echo "value=$IMAGE_NAME:$TAG" >> "$GITHUB_OUTPUT"
-
-      - name: Extract Short SHA for Unique Tagging
-        id: short-sha
-        run: echo "SHORT_SHA=$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_ENV
 
       - name: Build Image
         id: build
