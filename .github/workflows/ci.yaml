@@ -1,51 +1,29 @@
-name: CI
+name: Manual CI
 
 on:
-  push:
-    branches: [master]
-  pull_request:
   workflow_dispatch:
     inputs:
       branch:
         description: "Branch to build images from"
         required: true
         default: "master"
-      tag_name:
+      override_tag:
         description: "Override image tag (e.g., v10.0.0-beta.1-hot-fix)"
-        required: false
+        required: true
 
 permissions:
   contents: read
-  id-token: write 
 
 jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
 
-    services:
-      postgres:
-        image: postgres:10.8
-        env:
-          TZ: UTC
-        ports:
-          - 5432
-        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
-
-      mysql:
-        image: mysql:5.7
-        env:
-          MYSQL_ROOT_PASSWORD: root
-          MYSQL_DATABASE: dex
-        ports:
-          - 3306
-        options: --health-cmd "mysql -proot -e \"show databases;\"" --health-interval 10s --health-timeout 5s --health-retries 5
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.branch || github.ref }}
+          ref: ${{ inputs.branch }}
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -65,9 +43,9 @@ jobs:
         uses: helm/kind-action@v1.12.0
         with:
           version: "v0.17.0"
-          node_image: "kindest/node:v1.25.3@sha256:cd248d1438192f7814fbca8fede13cfe5b9918746dfa12583976158a834fd5c5"
+          node_image: "kindest/node:v1.25.3"
 
-      - name: Test
+      - name: Run tests
         run: make testall
 
   lint:
@@ -77,6 +55,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch }}
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -86,16 +66,30 @@ jobs:
       - name: Download golangci-lint
         run: make bin/golangci-lint
 
-      - name: Lint
+      - name: Run lint
         run: make lint
 
+  dependency-review:
+    name: Dependency Review
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch }}
+
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4.5.0
+
   artifacts:
-    name: Artifacts
+    name: Build and Push Artifacts
+    needs: [test, lint, dependency-review]
     uses: ./.github/workflows/artifacts.yaml
     with:
-      publish: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
-      branch: ${{ github.event.inputs.branch || github.ref_name }}
-      tag_name: ${{ github.event.inputs.tag_name || '' }}
+      publish: true
+      branch: ${{ inputs.branch }}
+      override_tag: ${{ inputs.override_tag }}
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
@@ -105,15 +99,3 @@ jobs:
       packages: write
       id-token: write
       security-events: write
-
-  dependency-review:
-    name: Dependency review
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Dependency Review
-        uses: actions/dependency-review-action@v4.5.0
