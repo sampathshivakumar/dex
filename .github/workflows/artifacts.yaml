@@ -8,12 +8,6 @@ on:
         default: false
         required: false
         type: boolean
-      branch:
-        description: "Branch to build images from"
-        required: true
-      override_tag:
-        description: "Override image tag (e.g., v10.0.0-beta.1-hot-fix)"
-        required: true
     secrets:
       AWS_ROLE_ARN:
         required: true
@@ -62,7 +56,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.branch }}
+          ref: ${{ github.event.inputs.branch || 'master' }}
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -85,6 +79,10 @@ jobs:
         id: image-name
         run: echo "value=public.ecr.aws/u6x9w5c9/my-repo" >> "$GITHUB_OUTPUT"
 
+      - name: Format Platform Name
+        id: platform-name
+        run: echo "PLATFORM_TAG=${{ matrix.platform }}" | sed 's/\//-/g' >> $GITHUB_ENV
+
       - name: Extract Short SHA for Unique Tagging
         id: short-sha
         run: echo "SHORT_SHA=$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_ENV
@@ -96,14 +94,23 @@ jobs:
           context: .
           platforms: ${{ matrix.platform }}
           tags: |
-            ${{ steps.image-name.outputs.value }}:${{ inputs.override_tag }}
+            ${{ steps.image-name.outputs.value }}:${{ matrix.variant }}-${{ env.PLATFORM_TAG }}-${{ env.SHORT_SHA }}
+            ${{ steps.image-name.outputs.value }}:${{ matrix.variant }}-${{ env.PLATFORM_TAG }}-latest
           build-args: |
             BASE_IMAGE=${{ matrix.variant }}
-          push: ${{ inputs.publish }}
+          provenance: false
 
-      - name: Set Image Reference
-        id: image-ref
-        run: echo "value=${{ steps.image-name.outputs.value }}@${{ steps.build.outputs.digest }}" >> "$GITHUB_OUTPUT"
+      ##  Trivy Security Scan Steps
+      - name: Get date
+        id: date
+        run: echo "date=$(date +%Y-%m-%d)" >> $GITHUB_OUTPUT
+
+      - name: Restore Trivy cache
+        uses: actions/cache@v4
+        with:
+          path: cache/db
+          key: trivy-cache-${{ steps.date.outputs.date }}
+          restore-keys: trivy-cache-
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@0.29.0
@@ -113,6 +120,18 @@ jobs:
           output: trivy-results.sarif
           scan-type: "fs"
           scan-ref: "."
+          cache-dir: "./cache"
+
+      - name: Change permissions for Trivy DB
+        run: sudo chmod 0644 ./cache/db/trivy.db
+
+      - name: Upload Trivy scan results as an artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: "Trivy-scan-results-${{ matrix.variant }}-${{ env.PLATFORM_TAG }}"
+          path: trivy-results.sarif
+          retention-days: 5
+          overwrite: true
 
       - name: Upload Trivy scan results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v3
